@@ -1,6 +1,8 @@
 # Lambert's Light Reflection Model (Dodecahedron)
 > CMSC 161 (Computer Graphics) Lambert's Light Reflection Model Lab Exercise, 2nd Semester AY 2015-2016, University of the Philippines Los Baños
 
+Learn more about Lambertian Reflectance by playing with this cute dodecahedron! <3
+
 ## Screenshots:
 
 ### Default State:
