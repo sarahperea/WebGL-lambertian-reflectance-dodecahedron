@@ -1,5 +1,5 @@
 # Lambert's Light Reflection Model (Dodecahedron)
-> CMSC 161 (Computer Graphics) Lambert's Light Reflection Model Exer, 2nd Semester AY 2015-2016, University of the Philippines Los Baños
+> CMSC 161 (Computer Graphics) Lambert's Light Reflection Model Lab Exercise, 2nd Semester AY 2015-2016, University of the Philippines Los Baños
 
 ## Screenshots:
 
