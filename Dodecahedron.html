@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Lighting :: Lambert's Light Reflection Model (Dodecahedron)</title>
+	<script type="x-shader/x-vertex" id="vshader">
+		attribute vec3 aPosition;         // position of current vertex
+		attribute vec3 aNormal;           // normal of current vertex
+
+		uniform mat4 uModel;              // model matrix
+		uniform mat4 uView;               // view matrix
+		uniform mat4 uProjection;         // projection matrix
+		uniform mat4 uNormal;             // normal matrix
+
+		uniform vec3 uLightDirection;     // light's direction
+		uniform vec3 uEyePosition;        // camera position
+
+		// Light Color Properties
+		uniform vec3 uLightAmbient;
+		uniform vec3 uLightDiffuse;
+		uniform vec3 uLightSpecular;
+
+		// Material Color Properties
+		uniform vec3 uMaterialAmbient;
+		uniform vec3 uMaterialDiffuse;
+		uniform vec3 uMaterialSpecular;
+		uniform float uShininess;
+
+		// Flags
+		uniform bool uEnableAmbient;
+		uniform bool uEnableDiffuse;
+		uniform bool uEnableSpecular;
+
+		varying vec4 vColor;              // color as specified in the buffer
+
+		void main() {
+		gl_Position = uProjection * uView * uModel * vec4(aPosition,1.0);
+
+		vec3 vertexPosition = vec3(uModel * vec4(aPosition,1.0));
+		vec3 ambientColor = vec3(0.0,0.0,0.0);
+		vec3 diffuseColor = vec3(0.0,0.0,0.0);
+		vec3 specularColor = vec3(0.0,0.0,0.0);
+
+		vec3 corrected_aNormal = vec3(uNormal * vec4(aNormal,1.0));		// adjustment of the vertex normals from object to world frame
+		// convert aNormal to vec4 in order for the matrix multiplication to work properly
+		// then revert it to vec3
+		vec3 normalized_aNormal = normalize(corrected_aNormal);			// normalize adjusted normals
+		vec3 normalized_uLightDirection = normalize(uLightDirection);
+
+
+		vec3 eyeDirection = uEyePosition - vertexPosition;           // vector that contains the distance and direction of the eye position from the object/vertex
+		vec3 normalized_eyeDirection = normalize(eyeDirection);
+
+		// compute for reflection direction of an incident vector
+		vec3 reflectDirection = reflect(
+		normalized_uLightDirection,     // normalized light direction vector - from light to surface
+		normalized_aNormal              // normal at a vertex in the surface
+		);
+		vec3 normalized_reflectDirection = normalize(reflectDirection);  // normalize computed reflection direction
+
+		//ambient
+		if(uEnableAmbient) {
+		ambientColor = uLightAmbient * uMaterialAmbient;
+	}
+
+	//diffuse
+	if(uEnableDiffuse) {
+	// negative lambertCoefficient is automatically converted to 0
+	float lambertCoefficient = max(dot(-normalized_uLightDirection,normalized_aNormal),0.0);
+	diffuseColor =  uLightDiffuse * uMaterialDiffuse * lambertCoefficient;
+}
+
+//specular
+if(uEnableSpecular) {
+// negative specularCoefficient is automatically converted to 0
+float specularCoefficient = max(dot(normalized_reflectDirection,normalized_eyeDirection),0.0);   
+specularCoefficient = pow(specularCoefficient,uShininess);
+specularColor =  uLightSpecular * uMaterialSpecular * specularCoefficient;
+}
+
+vColor = vec4(ambientColor+diffuseColor+specularColor,1.0);
+}
+</script>
+<script type="x-shader/x-fragment" id="fshader">
+	precision mediump float;
+	varying vec4 vColor;
+	void main() {
+	gl_FragColor = vColor;
+}
+</script>
+<script src="./lib/webgl-init.js"></script>
+<script src="./lib/webgl-utils.js"></script>
+<script src="./lib/webgl-debug.js"></script>
+<script src="./lib/gl-matrix.js"></script>
+<script>
+	function main() {
+		var canvas = document.getElementById("c");
+		var gl = initializeWebGL(canvas);
+
+		var vertexShader = initializeShader(gl,"vshader");
+		var fragmentShader = initializeShader(gl, "fshader");
+		var program = initializeProgram(gl,vertexShader,fragmentShader);
+		gl.useProgram(program);
+
+		var dodecahedron_vertices = [
+		0.9839, 0.0000, 1.2879,		 0.3041, 0.9357, 1.2879, 	-0.7959, 0.5783, 1.2879,	 -0.7959, -0.5783, 1.2879,	 0.3041, -0.9357, 1.2879,
+		0.9839, 0.0000, 1.2879,		 1.5920, 0.0000, 0.3041,	 1.2879, 0.9357, -0.3041,	  0.4920, 1.5141, 0.3041,	 0.3041, 0.9357, 1.2879,
+		0.3041, 0.9357, 1.2879,		 0.4920, 1.5141, 0.3041,	-0.4920, 1.5141, -0.3041,	 -1.2879, 0.9357, 0.3041,	-0.7959, 0.5783, 1.2879,
+		-0.7959, 0.5783, 1.2879,	   -1.2879, 0.9357, 0.3041, 	-1.5920, 0.0000, -0.3041, 	 -1.2879, -0.9357, 0.3041, -0.7959, -0.5783, 1.2879,
+		-0.7959, -0.5783, 1.2879, 	-1.2879, -0.9357, 0.3041,  -0.4920, -1.5141, -0.3041,   0.4920, -1.5141, 0.3041,  0.3041, -0.9357, 1.2879,
+		0.3041, -0.9357, 1.2879, 	 0.4920, -1.5141, 0.3041,   1.2879, -0.9357, -0.3041,   1.5920, 0.0000, 0.3041,   0.9839, 0.0000, 1.2879,
+		0.7959, 0.5783, -1.2879,    1.2879, 0.9357, -0.3041,   1.5920, 0.0000, 0.3041,     1.2879, -0.9357, -0.3041, 0.7959, -0.5783, -1.2879,
+		-0.3041, 0.9357, -1.2879,   -0.4920, 1.5141, -0.3041,   0.4920, 1.5141, 0.3041, 	  1.2879, 0.9357, -0.3041,  0.7959, 0.5783, -1.2879,
+		-0.9839, 0.0000, -1.2879,   -1.5920, 0.0000, -0.3041,  -1.2879, 0.9357, 0.3041,    -0.4920, 1.5141, -0.3041, -0.3041, 0.9357, -1.2879,
+		-0.3041, -0.9357, -1.2879,  -0.4920, -1.5141, -0.3041, -1.2879, -0.9357, 0.3041,   -1.5920, 0.0000, -0.3041, -0.9839, 0.0000, -1.2879,
+		0.7959, -0.5783, -1.2879,   1.2879, -0.9357, -0.3041,  0.4920, -1.5141, 0.3041,   -0.4920, -1.5141, -0.3041, -0.3041, -0.9357, -1.2879,
+		0.7959, -0.5783, -1.2879,  -0.3041, -0.9357, -1.2879, -0.9839, 0.0000, -1.2879, 	 -0.3041, 0.9357, -1.2879,  0.7959, 0.5783, -1.2879, 	
+		];
+		
+		  	//buffer creation
+		  	var dodecahedronVerticesBuffer = gl.createBuffer();
+		  	gl.bindBuffer(gl.ARRAY_BUFFER, dodecahedronVerticesBuffer);
+		  	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(dodecahedron_vertices), gl.STATIC_DRAW);
+		  	//attribute variable mapping to buffer
+		  	var aPosition = gl.getAttribLocation(program,"aPosition");
+		  	gl.vertexAttribPointer(aPosition,3,gl.FLOAT,false,0,0);
+		  	gl.enableVertexAttribArray(aPosition);
+		  	//unbind buffer to ARRAY_BUFFER POINTER
+		  	gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+			// Normal of each vertex
+			var normals = [];
+
+			//pushes vertex normals to array
+			for (var i=0; i<180; i=i+15){
+				var v1 = dodecahedron_vertices.slice(i, i+3);
+				var v2 = dodecahedron_vertices.slice(i+3, i+6);
+				var v0 = dodecahedron_vertices.slice(i+6, i+9);
+				var nx = (v1[1]-v0[1])*(v2[2]-v0[2]) - (v2[1]-v0[1])*(v1[2]-v0[2]);
+				var ny = (v1[0]-v0[0])*(v2[2]-v0[2]) - (v2[0]-v0[0])*(v1[2]-v0[2]);
+				var nz = (v1[0]-v0[0])*(v2[1]-v0[1]) - (v2[0]-v0[0])*(v1[1]-v0[1]);
+				var n = Math.sqrt(nx*nx + ny*ny + nz*nz);
+				normals.push((nx/n).toFixed(4));
+				normals.push((ny/n).toFixed(4));
+				normals.push((nz/n).toFixed(4));
+				normals.push((nx/n).toFixed(4));
+				normals.push((ny/n).toFixed(4));
+				normals.push((nz/n).toFixed(4));
+				normals.push((nx/n).toFixed(4));
+				normals.push((ny/n).toFixed(4));
+				normals.push((nz/n).toFixed(4));
+				normals.push((nx/n).toFixed(4));
+				normals.push((ny/n).toFixed(4));
+				normals.push((nz/n).toFixed(4));
+				normals.push((nx/n).toFixed(4));
+				normals.push((ny/n).toFixed(4));
+				normals.push((nz/n).toFixed(4));
+			}
+
+			
+		  	//buffer creation
+		  	var normalBuffer = gl.createBuffer();
+		  	gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+		  	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
+		  	//attribute variable mapping to buffer
+		  	var aNormal = gl.getAttribLocation(program,"aNormal");
+		  	gl.vertexAttribPointer(aNormal,3,gl.FLOAT,false,0,0);
+		  	gl.enableVertexAttribArray(aNormal);
+		  	//unbind buffer to ARRAY_BUFFER POINTER
+		  	gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+		  	// Indices of the vertices
+		  	var indices = [];
+
+		  	for (var i=0; i<60; i+=5){
+		  		indices.push(i);
+		  		indices.push(i+1);
+		  		indices.push(i+2);
+		  		indices.push(i);
+		  		indices.push(i+2);
+		  		indices.push(i+3);
+		  		indices.push(i);
+		  		indices.push(i+3);
+		  		indices.push(i+4);
+		  	}
+
+			//buffer creation
+			var indexBuffer = gl.createBuffer();
+			gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+			gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint8Array(indices), gl.STATIC_DRAW);
+		  	//unbind buffer to gl.ELEMENT_ARRAY_BUFFER POINTER
+		  	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+		  	//set-up model matrix, view matrix, and projection matrix
+		  	var modelMatrix = mat4.create();
+		  	var uModel = gl.getUniformLocation(program,"uModel");
+		  	gl.uniformMatrix4fv(uModel,false,modelMatrix);
+
+		  	//add normal matrix
+		  	var normalMatrix = mat4.create();
+		  	var uNormal = gl.getUniformLocation(program,"uNormal");
+		  	mat4.invert(normalMatrix,modelMatrix);
+		  	mat4.transpose(normalMatrix,normalMatrix);
+		  	gl.uniformMatrix4fv(uNormal,false,normalMatrix);
+
+		  	var MaterialAmbientColor = [0.5,0.5,0.5];
+		  	var MaterialDiffuseColor = [0.0,1.0,0.0];
+		  	var MaterialSpecularColor = [0.9,1.0,0.9];
+		  	var LightAmbientColor = [1.0,0.5,1.5];
+		  	var LightDiffuseColor = [1.0,1.0,1.0];
+		  	var LightSpecularColor = [1.5,1.0,1.0];
+		  	var MaterialShininessFactor = [20.0];
+		  	var CameraPosition = [3.0,3.0,7.0];
+		  	var EyePosition = [0.0,0.0,0.0];
+		  	var EnableAmb = [true];
+		  	var EnableDif = [true];
+		  	var EnableSpec = [true];
+
+		  	drawScene();
+
+		  	//draw the scene
+		  	function drawScene(){
+		  		var viewMatrix = mat4.create();
+		  		var uView = gl.getUniformLocation(program,"uView");
+		  		mat4.lookAt(viewMatrix,CameraPosition,EyePosition,[0,1,0]);
+		  		gl.uniformMatrix4fv(uView,false,viewMatrix);
+
+		  		var projectionMatrix = mat4.create();
+		  		var uProjection = gl.getUniformLocation(program,"uProjection");
+		  		mat4.perspective(projectionMatrix,glMatrix.toRadian(30),canvas.width/canvas.height,1,100);
+		  		gl.uniformMatrix4fv(uProjection,false,projectionMatrix);
+
+			  	//set-up light and material parameters
+			  	var uLightDirection= gl.getUniformLocation(program,"uLightDirection");
+			  	gl.uniform3f(uLightDirection,-1.0,-2.5,-5.0);
+
+			  	// Material Color Properties
+			  	var uMaterialAmbient = gl.getUniformLocation(program,"uMaterialAmbient");
+			  	gl.uniform3f(uMaterialAmbient,MaterialAmbientColor[0], MaterialAmbientColor[1], MaterialAmbientColor[2]);
+
+			  	var uMaterialDiffuse = gl.getUniformLocation(program,"uMaterialDiffuse");
+			  	gl.uniform3f(uMaterialDiffuse, MaterialDiffuseColor[0], MaterialDiffuseColor[1], MaterialDiffuseColor[2]);
+
+			  	var uMaterialSpecular = gl.getUniformLocation(program,"uMaterialSpecular");
+			  	gl.uniform3f(uMaterialSpecular,MaterialSpecularColor[0],MaterialSpecularColor[1],MaterialSpecularColor[2]);
+
+		      // Light Color Properties
+		      var uLightAmbient = gl.getUniformLocation(program,"uLightAmbient");
+		      gl.uniform3f(uLightAmbient,LightAmbientColor[0],LightAmbientColor[1],LightAmbientColor[2]);
+
+		      var uLightDiffuse = gl.getUniformLocation(program,"uLightDiffuse");
+		      gl.uniform3f(uLightDiffuse, LightDiffuseColor[0], LightDiffuseColor[1], LightDiffuseColor[2]);
+
+		      var uLightSpecular = gl.getUniformLocation(program,"uLightSpecular");
+		      gl.uniform3f(uLightSpecular,LightSpecularColor[0],LightSpecularColor[1],LightSpecularColor[2]);
+
+		      var uShininess = gl.getUniformLocation(program,"uShininess");
+		      gl.uniform1f(uShininess,MaterialShininessFactor[0]);
+
+	         // Flags
+	         var uEnableAmbient = gl.getUniformLocation(program,"uEnableAmbient");
+	         gl.uniform1i(uEnableAmbient,EnableAmb[0]);
+
+	         var uEnableDiffuse = gl.getUniformLocation(program,"uEnableDiffuse");
+	         gl.uniform1i(uEnableDiffuse,EnableDif[0]);
+
+	         var uEnableSpecular = gl.getUniformLocation(program,"uEnableSpecular");
+	         gl.uniform1i(uEnableSpecular,EnableSpec[0]);
+
+	         gl.clearColor(0.7, 0.7, 0.7, 1);
+	         gl.enable(gl.DEPTH_TEST);
+	         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+	         gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_BYTE, 0);
+	     }
+	     
+	     /*event listeners for ui*/
+	     function translate(c, s, colorOrPosition, translation, divider){
+	     	return function(){
+	     		var t;
+	     		if(c == 0) t = s+colorOrPosition;
+	     		else if(c == 1) t = s+colorOrPosition;
+	     		else if(c == 2) t = s+colorOrPosition;
+	     		var rangeUi = document.getElementById(t);
+	     		translation[c] = document.getElementById(t+"-value").value = rangeUi.value/divider;
+	     		drawScene();
+	     	}
+	     }
+
+	     function enable(value, enab){
+	     	return function(){
+	     		var rangeUi = document.getElementById(value);
+	     		if(rangeUi.value == 0)
+	     			enab[0] = true;
+	     		else enab[0] = false;
+	     		drawScene();
+	     	}
+	     }
+
+	     document.getElementById("r-lac").addEventListener("change",translate(0, "r", "-lac", LightAmbientColor, 100));
+	     document.getElementById("g-lac").addEventListener("change",translate(1, "g", "-lac", LightAmbientColor, 100));
+	     document.getElementById("b-lac").addEventListener("change",translate(2, "b", "-lac", LightAmbientColor, 100));
+	     document.getElementById("r-ldc").addEventListener("change",translate(0, "r", "-ldc", LightDiffuseColor, 100));
+	     document.getElementById("g-ldc").addEventListener("change",translate(1, "g", "-ldc", LightDiffuseColor, 100));
+	     document.getElementById("b-ldc").addEventListener("change",translate(2, "b", "-ldc", LightDiffuseColor, 100));
+	     document.getElementById("r-lsc").addEventListener("change",translate(0, "r", "-lsc", LightSpecularColor, 100));
+	     document.getElementById("g-lsc").addEventListener("change",translate(1, "g", "-lsc", LightSpecularColor, 100));
+	     document.getElementById("b-lsc").addEventListener("change",translate(2, "b", "-lsc", LightSpecularColor, 100));
+	     document.getElementById("r-mac").addEventListener("change",translate(0, "r", "-mac", MaterialAmbientColor, 100));
+	     document.getElementById("g-mac").addEventListener("change",translate(1, "g", "-mac", MaterialAmbientColor, 100));
+	     document.getElementById("b-mac").addEventListener("change",translate(2, "b", "-mac", MaterialAmbientColor, 100));
+	     document.getElementById("r-mdc").addEventListener("change",translate(0, "r", "-mdc", MaterialDiffuseColor, 100));
+	     document.getElementById("g-mdc").addEventListener("change",translate(1, "g", "-mdc", MaterialDiffuseColor, 100));
+	     document.getElementById("b-mdc").addEventListener("change",translate(2, "b", "-mdc", MaterialDiffuseColor, 100));
+	     document.getElementById("r-msc").addEventListener("change",translate(0, "r", "-msc", MaterialSpecularColor, 100));
+	     document.getElementById("g-msc").addEventListener("change",translate(1, "g", "-msc", MaterialSpecularColor, 100));
+	     document.getElementById("b-msc").addEventListener("change",translate(2, "b", "-msc", MaterialSpecularColor, 100));
+	     document.getElementById("s-msf").addEventListener("change",translate(0, "s", "-msf", MaterialShininessFactor, 1));
+	     document.getElementById("x-cp").addEventListener("change",translate(0, "x", "-cp", CameraPosition, 10));
+	     document.getElementById("y-cp").addEventListener("change",translate(1, "y", "-cp", CameraPosition, 10));
+	     document.getElementById("z-cp").addEventListener("change",translate(2, "z", "-cp", CameraPosition, 10));
+	     document.getElementById("x-ep").addEventListener("change",translate(0, "x", "-ep", EyePosition, 100));
+	     document.getElementById("y-ep").addEventListener("change",translate(1, "y", "-ep", EyePosition, 100));
+	     document.getElementById("z-ep").addEventListener("change",translate(2, "z", "-ep", EyePosition, 100));
+	     document.getElementById("en-amb").addEventListener("change",enable("en-amb", EnableAmb));
+	     document.getElementById("en-dif").addEventListener("change",enable("en-dif", EnableDif));
+	     document.getElementById("en-spec").addEventListener("change",enable("en-spec", EnableSpec));
+	 }
+	</script>
+
+</head>
+<body onload="main()" style="background-color:black; color:white">
+	<h1> Lighting :: Lambert's Light Reflection Model (Dodecahedron) </h1> <br/><br/>
+	<canvas id="c" width="400" height="400" style="border: 2px white solid; float:left; margin-right:20px">
+	</canvas>
+	
+	<div style="float:left; margin-right:15px">
+		<h3> Light's Ambient Color: </h3>
+		R=<input type="text" id="r-lac-value" value="0" size="2" style="color:red; font-weight:bold; width:20px" disabled>
+		<input min="0" max="100" type="range" id="r-lac" value=0 ><br/>
+		G=<input type="text" id="g-lac-value" value="0" size="2" style="color:green; font-weight:bold; width:20px" disabled>
+		<input min="0" max="100" type="range" id="g-lac" value=0><br/>
+		B=<input type="text" id="b-lac-value" value="0" size="2" style="color:blue; font-weight:bold; width:20px" disabled>
+		<input min="0" max="100" type="range" id="b-lac" value=0><br/>
+
+		<h3> Light's Diffuse Color: </h3>
+		R=<input type="text" id="r-ldc-value" value="0" size="2" style="color:red; font-weight:bold; width:20px" disabled>
+		<input min="0" max="100" type="range" id="r-ldc" value=0 ><br/>
+		G=<input type="text" id="g-ldc-value" value="0" size="2" style="color:green; font-weight:bold; width:20px" disabled>
+		<input min="0" max="100" type="range" id="g-ldc" value=0><br/>
+		B=<input type="text" id="b-ldc-value" value="0" size="2" style="color:blue; font-weight:bold; width:20px" disabled>
+		<input min="0" max="100" type="range" id="b-ldc" value=0><br/>
+
+		<h3> Light's Specular Color: </h3>
+		R=<input type="text" id="r-lsc-value" value="0" size="2" style="color:red; font-weight:bold; width:20px" disabled>
+		<input min="0" max="100" type="range" id="r-lsc" value=0 ><br/>
+		G=<input type="text" id="g-lsc-value" value="0" size="2" style="color:green; font-weight:bold; width:20px" disabled>
+		<input min="0" max="100" type="range" id="g-lsc" value=0><br/>
+		B=<input type="text" id="b-lsc-value" value="0" size="2" style="color:blue; font-weight:bold; width:20px" disabled>
+		<input min="0" max="100" type="range" id="b-lsc" value=0><br/>
+	</div>
+
+	<div style="float:left; margin-right:15px">
+		<h3> Material's Ambient Color: </h3>
+		R=<input type="text" id="r-mac-value" value="0" size="2" style="color:red; font-weight:bold; width:20px" disabled>
+		<input min="0" max="100" type="range" id="r-mac" value=0><br/>
+		G=<input type="text" id="g-mac-value" value="0" size="2" style="color:green; font-weight:bold; width:20px" disabled>
+		<input min="0" max="100" type="range" id="g-mac" value=0><br/>
+		B=<input type="text" id="b-mac-value" value="0" size="2" style="color:blue; font-weight:bold; width:20px"disabled>
+		<input min="0" max="100" type="range" id="b-mac" value=0><br/>
+
+		<h3> Material's Diffuse Color: </h3>
+		R=<input type="text" id="r-mdc-value" value="0" size="2" style="color:red; font-weight:bold; width:20px" disabled>
+		<input min="0" max="100" type="range" id="r-mdc" value=0><br/>
+		G=<input type="text" id="g-mdc-value" value="0" size="2" style="color:green; font-weight:bold; width:20px" disabled>
+		<input min="0" max="100" type="range" id="g-mdc" value=0><br/>
+		B=<input type="text" id="b-mdc-value" value="0" size="2" style="color:blue; font-weight:bold; width:20px"disabled>
+		<input min="0" max="100" type="range" id="b-mdc" value=0><br/>
+
+		<h3> Material's Specular Color: </h3>
+		R=<input type="text" id="r-msc-value" value="0" size="2" style="color:red; font-weight:bold; width:20px" disabled>
+		<input min="0" max="100" type="range" id="r-msc" value=0><br/>
+		G=<input type="text" id="g-msc-value" value="0" size="2" style="color:green; font-weight:bold; width:20px" disabled>
+		<input min="0" max="100" type="range" id="g-msc" value=0><br/>
+		B=<input type="text" id="b-msc-value" value="0" size="2" style="color:blue; font-weight:bold; width:20px"disabled>
+		<input min="0" max="100" type="range" id="b-msc" value=0><br/>
+
+	</div>
+
+	<div style="float:left">
+		<h3> Material's Shininess Factor:</h3> 
+		<input type="text" id="s-msf-value" value="0" size="3" style="color:black; font-weight:bold; width:20px" disabled>
+		<input min="0" max="100" type="range" id="s-msf" value=0><br/>
+		
+		<h3> Camera Position: </h3>
+		X=<input type="text" id="x-cp-value" value="0" size="2" style="color:black; font-weight:bold; width:20px" disabled>
+		<input min="-100" max="100" type="range" id="x-cp" value=0><br/>
+		Y=<input type="text" id="y-cp-value" value="0" size="2" style="color:black; font-weight:bold; width:20px" disabled>
+		<input min="-100" max="100" type="range" id="y-cp" value=0><br/>
+		Z=<input type="text" id="z-cp-value" value="0" size="2" style="color:black; font-weight:bold; width:20px" disabled>
+		<input min="-100" max="100" type="range" id="z-cp" value=0><br/>
+
+		<h3> Eye Position: </h3>
+		X=<input type="text" id="x-ep-value" value="0" size=2 style="color:black; font-weight:bold; width:20px" disabled>
+		<input min="-100" max="100" type="range" id="x-ep" value=0><br/>
+		Y=<input type="text" id="y-ep-value" value="0" size=2 style="color:black; font-weight:bold; width:20px" disabled>
+		<input min="-100" max="100" type="range" id="y-ep" value=0><br/>
+		Z=<input type="text" id="z-ep-value" value="0" size=2 style="color:black; font-weight:bold; width:20px" disabled>
+		<input min="-100" max="100" type="range" id="z-ep" value=0><br/>
+	</div>
+
+	<div style="float:left; width:33%; margin-top:20px; margin-bottom:20px"><hr/>
+		<h3> Ambient </h3>
+		Enable <input min="0" max="1" type="range" id="en-amb" value=0 style="width:100px"> Disable
+	</div>
+
+	<div style="float:left; width:33%; margin-top:20px; margin-bottom:20px"><hr/>
+		<h3> Diffuse </h3>
+		Enable <input min="0" max="1" type="range" id="en-dif" value=0 style="width:100px"> Disable
+	</div>
+
+	<div style="float:left; width:33%; margin-top:20px; margin-bottom:20px"><hr/>
+		<h3> Specular </h3>
+		Enable <input min="0" max="1" type="range" id="en-spec" value=0 style="width:100px"> Disable
+	</div>
+</body>
+</html>
